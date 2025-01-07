@@ -1,42 +1,59 @@
 <?php
 include 'config.php'; // Include the database connection
 
-session_start(); // Start the session to store user data
+session_start(); // Start the session
+
+// Redirect if the user is already logged in
+if (isset($_SESSION['user_id'])) {
+    header("Location: home.php");
+    exit();
+}
 
 // Check if the login form is submitted
-if (isset($_POST['user-login'])) {
-    $email = mysqli_real_escape_string($conn, trim($_POST['user-email']));
-    $user_password = mysqli_real_escape_string($conn, trim($_POST['user_password']));
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user-login'])) {
+    // Sanitize and validate input
+    $email = filter_var(trim($_POST['user-email']), FILTER_SANITIZE_EMAIL);
+    $password = trim($_POST['user_password']);
 
-    // Query to check if the email exists in the database
-    $sql = "SELECT * FROM users WHERE email = '$email'";
-    $result = mysqli_query($conn, $sql);
+    if (filter_var($email, FILTER_VALIDATE_EMAIL) && !empty($password)) {
+        try {
+            // Prepare a secure SQL query using PDO
+            $stmt = $conn->prepare("SELECT * FROM users WHERE email = :email");
+            $stmt->bindParam(':email', $email, PDO::PARAM_STR);
+            $stmt->execute();
 
-    if (mysqli_num_rows($result) > 0) {
-        $user = mysqli_fetch_assoc($result);
+            if ($stmt->rowCount() > 0) {
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        // Verify the password
-        if (password_verify($user_password, $user['password'])) {
-          // Password is correct, login successful
-          $_SESSION['user_id'] = $user['id']; // Add this line
-          $_SESSION['user_email'] = $user['email'];
-          $_SESSION['user_role'] = ($user['role_id'] == 1) ? 'admin' : 'user'; // Map role_id to 'admin' or 'user'
-      
-          // Redirect based on the user role
-          if ($_SESSION['user_role'] === 'admin') {
-              header("Location: admin_home.php"); // Redirect admin to the dashboard
-          } else {
-              header("Location: home.php"); // Redirect regular users to the home page
-          }
-          exit();
-      }
-       else {
-            // Invalid password
-            $_SESSION['error'] = "Incorrect password. Please try again.";
+                // Verify the password
+                if (password_verify($password, $user['password'])) {
+                    // Login successful
+                    $_SESSION['user_id'] = $user['id'];
+                    $_SESSION['user_email'] = $user['email'];
+                    $_SESSION['user_role'] = ($user['role_id'] == 1) ? 'admin' : 'user';
+
+                    // Redirect based on the user role
+                    if ($_SESSION['user_role'] === 'admin') {
+                        header("Location: admin_home.php");
+                    } else {
+                        header("Location: home.php");
+                    }
+                    exit();
+                } else {
+                    // Invalid password
+                    $error = "Incorrect password. Please try again.";
+                }
+            } else {
+                // Email not found
+                $error = "No account found with this email.";
+            }
+        } catch (PDOException $e) {
+            // Handle database connection errors
+            $error = "An error occurred. Please try again later.";
+            error_log($e->getMessage()); // Log the error for debugging
         }
     } else {
-        // Email not found
-        $_SESSION['error'] = "No account found with this email.";
+        $error = "Invalid email or password. Please try again.";
     }
 }
 ?>
@@ -51,17 +68,13 @@ if (isset($_POST['user-login'])) {
 </head>
 <body>
   <div class="container">
-    <input type="checkbox" id="check">
     <div class="login form">
       <header>Login</header>
 
       <!-- Display error messages -->
-      <?php if (isset($_SESSION['error'])): ?>
+      <?php if (!empty($error)): ?>
         <div class="error">
-          <?php 
-            echo htmlspecialchars($_SESSION['error']);
-            unset($_SESSION['error']); // Clear error after displaying it
-          ?>
+          <?php echo htmlspecialchars($error); ?>
         </div>
       <?php endif; ?>
 
@@ -72,7 +85,7 @@ if (isset($_POST['user-login'])) {
       </form>
       <div class="signup">
         <span class="signup">Don't have an account?
-         <a href="register.php">Signup</a>
+          <a href="register.php">Signup</a>
         </span>
       </div>
     </div>

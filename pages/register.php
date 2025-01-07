@@ -1,12 +1,12 @@
 <?php
-include 'config.php'; // Ensure this file has a valid $conn connection to the database
+include 'config.php'; // Ensure this file has a valid $conn connection to the database using PDO
 
 if (isset($_POST['user-register'])) {  
 
-    // Collect and sanitize user inputs
-    $email = mysqli_real_escape_string($conn, $_POST['user-email']);
-    $password1 = mysqli_real_escape_string($conn, $_POST['user_password1']);
-    $password2 = mysqli_real_escape_string($conn, $_POST['user_password2']);
+    // Collect and sanitize user inputs using PDO
+    $email = trim($_POST['user-email']);
+    $password1 = trim($_POST['user_password1']);
+    $password2 = trim($_POST['user_password2']);
 
     // Check if passwords match
     if ($password1 === $password2) {
@@ -21,14 +21,18 @@ if (isset($_POST['user-register'])) {
 
         // Insert user into the database if email is not empty
         if (!empty($email) && !empty($password1)) {
-            $sql = "INSERT INTO users (id, username, email, password) 
-                    VALUES (NULL, '$username', '$email', '$user_password')";
-            
-            if (mysqli_query($conn, $sql)) {
+            // Prepare the query using PDO
+            $sql = "INSERT INTO users (username, email, password) VALUES (:username, :email, :password)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bindParam(':username', $username);
+            $stmt->bindParam(':email', $email);
+            $stmt->bindParam(':password', $user_password);
+
+            if ($stmt->execute()) {
                 echo "Registration successful! Your username is: $username";
                 header("Location: login.php");
             } else {
-                echo "Error: " . mysqli_error($conn);
+                echo "Error: " . $stmt->errorInfo()[2];
             }
         } else {
             echo "Please fill in all fields.";
@@ -38,6 +42,7 @@ if (isset($_POST['user-register'])) {
     }
 }
 ?>
+
 
 <!DOCTYPE html>
 <html lang="en">
