@@ -7,17 +7,19 @@ include('Post.php');
 include('Like.php');
 
 // Ensure user is logged in
-if (!isset($_SESSION['user_email'])) {
+if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
 }
 
-// Get the user ID from the email
-$user = new User($conn, $_SESSION['user_email'], 0); // Temporarily create the user to fetch user ID
-$userId = $user->getUserIdByEmail($_SESSION['user_email']); // Retrieve the user ID using the email
-
-// Initialize the User class correctly with all parameters
-$user = new User($conn, $_SESSION['user_email'], $userId); // Initialize User class with all arguments
+// Initialize User class and fetch the user by ID from session
+$user = new User($conn);
+$userId = $_SESSION['user_id'];
+if ($userId === null) {
+    echo "Error: User ID is not set.";
+    exit();
+}
+$user->setId($userId); // Set the user ID based on session data
 
 // Initialize other classes
 $tag = new Tag($conn);
@@ -33,14 +35,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['tweetButton'])) {
         $title = $_POST['tweettitle'];
         $content = $_POST['tweetContent'];
-        $tags = $_POST['postTags'];
-        $post->createPost($userId, $title, $content, $tags);
-    } elseif (isset($_POST['deletePost'])) {
-        $post->deletePost($_POST['post_id'], $userId);
-    } elseif (isset($_POST['likeButton'])) {
-        $like->likePost($userId, $_POST['post_id']);
+        $tags = isset($_POST['postTags']) ? $_POST['postTags'] : [];
+
+        if (!empty($tags)) {
+            $user->addPost($title, $content, $tags);
+        } else {
+            echo "Please select at least one tag.";
+        }
+    }
+
+    // Handle like/unlike actions
+    if (isset($_POST['likeButton'])) {
+        $postId = $_POST['post_id'];
+        $like->likePost($userId, $postId);
     } elseif (isset($_POST['unlikeButton'])) {
-        $like->unlikePost($userId, $_POST['post_id']);
+        $postId = $_POST['post_id'];
+        $like->unlikePost($userId, $postId);
+    }
+
+    // Handle post deletion
+    if (isset($_POST['deletePost'])) {
+        $postId = $_POST['post_id'];
+        $user->deletePost($postId);
     }
 }
 ?>
@@ -52,6 +68,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="../style/home.css">
     <title>Home</title>
+    <style>
+        .like-button {
+            background-color: #e0ffe0; /* Light green */
+            color: #008000; /* Green */
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .like-button:hover {
+            background-color: #c4ffc4;
+        }
+
+        .liked {
+            background-color: #008000;
+            color: #ffffff;
+        }
+    </style>
 </head>
 <body>
 
@@ -68,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
 <div class="main">
-    <h2>Welcome, <?php echo htmlspecialchars($_SESSION['user_email']); ?>!</h2>
+    <h2>Welcome, <?php echo htmlspecialchars($user->getUsername()); ?>!</h2>
 
     <!-- Tweet Box -->
     <div class="tweet-box">
@@ -93,18 +128,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="tweet">
                 <h3><?php echo htmlspecialchars($post['username']); ?> - <?php echo htmlspecialchars($post['title']); ?></h3>
                 <p><?php echo htmlspecialchars($post['content']); ?></p>
-                <p><strong>#</strong><?php echo htmlspecialchars($post['tag_names'] ?? 'No tags'); ?></p>
+                <p><strong>Tags:</strong> 
+                    <?php 
+                        $postTags = $post['tag_names'] ?? 'No tags';
+                        echo htmlspecialchars($postTags); 
+                    ?>
+                </p>
                 <small>Posted on: <?php echo htmlspecialchars($post['created_at']); ?></small>
-                
+
                 <p><strong>Likes:</strong> <?php echo htmlspecialchars($post['like_count']); ?></p>
                 <form method="POST" action="home.php">
                     <input type="hidden" name="post_id" value="<?php echo $post['id']; ?>">
                     <?php if ($like->hasLiked($userId, $post['id'])) : ?>
-                        <button type="submit" name="unlikeButton">Unlike</button>
+                        <button type="submit" name="unlikeButton" class="like-button liked">❤️ Unlike</button>
                     <?php else : ?>
-                        <button type="submit" name="likeButton">Like</button>
+                        <button type="submit" name="likeButton" class="like-button">💚 Like</button>
                     <?php endif; ?>
                 </form>
+
+                <!-- Optional Delete Button -->
+                <?php if ($post['user_id'] == $userId) : ?>
+                    <form method="POST" action="home.php">
+                        <input type="hidden" name="post_id" value="<?php echo $post['id']; ?>">
+                        <button type="submit" name="deletePost">Delete</button>
+                    </form>
+                <?php endif; ?>
             </div>
         <?php endforeach; ?>
     </div>

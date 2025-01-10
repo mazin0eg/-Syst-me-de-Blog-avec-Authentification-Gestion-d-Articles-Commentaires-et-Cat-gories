@@ -2,24 +2,42 @@
 class Like {
     private $conn;
 
-    public function __construct($db) {
-        $this->conn = $db;
-    }
-
-    public function likePost($userId, $postId) {
-        $stmt = $this->conn->prepare("INSERT INTO likes (user_id, post_id) VALUES (?, ?)");
-        return $stmt->execute([$userId, $postId]);
-    }
-
-    public function unlikePost($userId, $postId) {
-        $stmt = $this->conn->prepare("DELETE FROM likes WHERE user_id = ? AND post_id = ?");
-        return $stmt->execute([$userId, $postId]);
+    public function __construct($conn) {
+        $this->conn = $conn;
     }
 
     public function hasLiked($userId, $postId) {
-        $stmt = $this->conn->prepare("SELECT id FROM likes WHERE user_id = ? AND post_id = ?");
-        $stmt->execute([$userId, $postId]);
-        return $stmt->rowCount() > 0;
+        try {
+            $stmt = $this->conn->prepare("SELECT COUNT(*) FROM likes WHERE user_id = :user_id AND post_id = :post_id");
+            $stmt->bindParam(':user_id', $userId);
+            $stmt->bindParam(':post_id', $postId);
+            $stmt->execute();
+            return $stmt->fetchColumn() > 0;
+        } catch (PDOException $e) {
+            throw new Exception("Error checking like status: " . $e->getMessage());
+        }
+    }
+
+    public function likePost($userId, $postId) {
+        try {
+            $stmt = $this->conn->prepare("INSERT INTO likes (user_id, post_id) VALUES (:user_id, :post_id)");
+            $stmt->bindParam(':user_id', $userId);
+            $stmt->bindParam(':post_id', $postId);
+            $stmt->execute();
+        } catch (PDOException $e) {
+            throw new Exception("Error liking post: " . $e->getMessage());
+        }
+    }
+
+    public function unlikePost($userId, $postId) {
+        try {
+            $stmt = $this->conn->prepare("DELETE FROM likes WHERE user_id = :user_id AND post_id = :post_id");
+            $stmt->bindParam(':user_id', $userId);
+            $stmt->bindParam(':post_id', $postId);
+            $stmt->execute();
+        } catch (PDOException $e) {
+            throw new Exception("Error unliking post: " . $e->getMessage());
+        }
     }
 }
 ?>

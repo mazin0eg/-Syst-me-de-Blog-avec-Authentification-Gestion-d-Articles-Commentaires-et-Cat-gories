@@ -1,48 +1,26 @@
 <?php
-include 'config.php'; // Ensure this file has a valid $conn connection to the database using PDO
+include 'config.php';
+include 'User.php';
 
-if (isset($_POST['user-register'])) {  
+$error = null;
 
-    // Collect and sanitize user inputs using PDO
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['user-register'])) {
     $email = trim($_POST['user-email']);
     $password1 = trim($_POST['user_password1']);
     $password2 = trim($_POST['user_password2']);
 
-    // Check if passwords match
-    if ($password1 === $password2) {
-        $user_password = password_hash($password1, PASSWORD_BCRYPT); // Encrypt password
+    try {
+        $user = new User($conn);
+        $username = $user->register($email, $password1, $password2);
 
-        // Generate username from email
-        function generateUsername($email) {
-            $username = strstr($email, '@', true); // Extract before '@'
-            return '@' . $username;
-        }
-        $username = generateUsername($email);
-
-        // Insert user into the database if email is not empty
-        if (!empty($email) && !empty($password1)) {
-            // Prepare the query using PDO
-            $sql = "INSERT INTO users (username, email, password) VALUES (:username, :email, :password)";
-            $stmt = $conn->prepare($sql);
-            $stmt->bindParam(':username', $username);
-            $stmt->bindParam(':email', $email);
-            $stmt->bindParam(':password', $user_password);
-
-            if ($stmt->execute()) {
-                echo "Registration successful! Your username is: $username";
-                header("Location: login.php");
-            } else {
-                echo "Error: " . $stmt->errorInfo()[2];
-            }
-        } else {
-            echo "Please fill in all fields.";
-        }
-    } else {
-        echo "Passwords do not match.";
+        echo "Registration successful! Your username is: $username";
+        header("Location: login.php");
+        exit();
+    } catch (Exception $e) {
+        $error = $e->getMessage();
     }
 }
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -50,14 +28,21 @@ if (isset($_POST['user-register'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="../style/login.css">
-    <title>Login & Registration Form</title>
+    <title>Signup</title>
 </head>
 <body>
     <div class="container">
-        <input type="checkbox" id="check">
         <div class="registration form">
             <header>Signup</header>
-            <form action="" method="POST">
+
+            <!-- Display error messages -->
+            <?php if (!empty($error)): ?>
+                <div class="error">
+                    <?php echo htmlspecialchars($error); ?>
+                </div>
+            <?php endif; ?>
+
+            <form action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" method="POST">
                 <input type="text" id="user-email" name="user-email" placeholder="Enter your email" required>
                 <input type="password" id="user_password1" name="user_password1" placeholder="Enter your password" required>
                 <input type="password" id="user_password2" name="user_password2" placeholder="Confirm your password" required>
@@ -65,7 +50,6 @@ if (isset($_POST['user-register'])) {
             </form>
             <div class="signup">
                 <span class="signup">Already have an account?
-                
                     <a href="login.php">Login</a>
                 </span>
             </div>
